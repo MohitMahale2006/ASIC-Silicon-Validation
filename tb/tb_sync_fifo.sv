@@ -88,6 +88,16 @@ module tb_sync_fifo #(
         end
     endtask
 
+    task automatic emit_trace;
+        input string test_name;
+        begin
+            $display(
+                "TRACE_JSON {\"cycle\":%0d,\"test\":\"%s\",\"rst_n\":%0d,\"wr_en\":%0d,\"rd_en\":%0d,\"data_in_hex\":\"%0h\",\"data_out_hex\":\"%0h\",\"occupancy\":%0d,\"full\":%0d,\"empty\":%0d}",
+                cycle_number, test_name, rst_n, wr_en, rd_en, data_in,
+                data_out, occupancy, full, empty);
+        end
+    endtask
+
     task automatic apply_cycle;
         input logic do_write;
         input logic do_read;
@@ -120,6 +130,7 @@ module tb_sync_fifo #(
             cycle_number = cycle_number + 1;
             #1;
             check_outputs(test_name);
+            emit_trace(test_name);
         end
     endtask
 
@@ -139,6 +150,7 @@ module tb_sync_fifo #(
             cycle_number = cycle_number + 1;
             #1;
             check_outputs(test_name);
+            emit_trace(test_name);
         end
     endtask
 

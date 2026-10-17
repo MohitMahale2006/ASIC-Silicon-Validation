@@ -10,4 +10,5 @@ reports/fault_injection_*.vvp
 reports/regression_*.log
 reports/regression_*.json
 reports/regression_*.vvp
+reports/functional_coverage_*.json
 reports/extended-validation-*/

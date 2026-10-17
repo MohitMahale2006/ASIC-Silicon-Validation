@@ -28,7 +28,7 @@ The random seed and number of randomized cycles can be overridden with `+SEED=<d
 ## Current Automation Test Layers
 
 - Standard-library Python unit tests cover the validation and regression runners, fault-injection classification, report summaries, and diagnostic analysis. The FIFO scoreboard is in the SystemVerilog testbench; no separate Python FIFO reference model exists.
-- Basic CI runs unit tests and normal FIFO simulation. Extended CI also runs the five-config regression, regression matrix, opt-in fault detection, and current-run diagnostic analysis, then uploads report evidence.
+- Basic CI runs unit tests and normal FIFO simulation. Extended CI also runs the five-config regression, regression matrix, controlled fault detection, and current-run diagnostic analysis, then uploads report evidence.
 
 ## Parameter Regression
 
@@ -40,7 +40,7 @@ Generate a Markdown matrix with `python scripts/summarize_regression.py`; view i
 
 ## Opt-In Fault-Injection Check
 
-Run `python scripts/run_fault_injection.py` separately from normal validation. The harness mutates only a temporary RTL copy by inverting the read-data LSB. Expected evidence is a successful compile followed by a nonzero simulator exit containing `FAIL test=single_read_zero cycle=3 seed=1 data_out expected=0x00 actual=0x01`. A compile/tool error or a different simulation failure is not a detected fault. The harness returns zero only for the expected injected failure; the simulator itself must return nonzero. This check is intentionally excluded from routine CI so normal CI remains a pass-only validation run.
+Run `python scripts/run_fault_injection.py` separately from normal validation. The harness mutates only a temporary RTL copy by inverting the read-data LSB. Expected evidence is a successful compile followed by a nonzero simulator exit containing `FAIL test=single_read_zero cycle=3 seed=1 data_out expected=0x00 actual=0x01`. A compile/tool error or a different simulation failure is not a detected fault. The harness returns zero only for the expected injected failure; the simulator itself must return nonzero. Basic CI omits fault injection; the extended workflow runs it and passes only when the harness confirms the expected diagnostic.
 
 ## Checks and Evidence
 
@@ -52,7 +52,7 @@ Run `python scripts/run_fault_injection.py` separately from normal validation. T
 
 ## Exit Criteria
 
-The RTL simulation check is complete when compilation succeeds and the directed plus seeded-random testbench run exits successfully with its final pass message. Python unit tests, CI, physical-silicon validation, timing, power, and silicon-coverage claims are outside this testbench's exit criteria.
+The RTL simulation check is complete when compilation succeeds and the directed plus seeded-random testbench run exits successfully with its final pass message. Python unit tests and CI have separate exit criteria. Physical-silicon validation, timing, power, and silicon-coverage claims are outside this simulation plan.
 
 ## Not in Initial Scope
 

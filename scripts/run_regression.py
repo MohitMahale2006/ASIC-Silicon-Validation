@@ -13,8 +13,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from verification.functional_coverage import (
+    SCENARIOS,
+    collect_scenario_coverage,
+    compare_trace_to_model,
+    write_regression_coverage_report,
+)
+
+
 REPORTS_DIR = PROJECT_ROOT / "reports"
 DEFAULT_CONFIGURATIONS = ((5, 8), (3, 8), (5, 16), (8, 32), (16, 8))
 PASS_MARKER = "PASS ALL FIFO TESTS"
@@ -181,6 +191,13 @@ def run_configuration(
         "compiled_file_path": image_argument,
         "error_details": [],
         "steps": {},
+        "trace_comparison": {
+            "status": "not_run",
+            "trace_records": 0,
+            "mismatches": [],
+            "errors": ["simulation was not run"],
+        },
+        "functional_coverage": collect_scenario_coverage("", depth),
         "exit_code": 0,
     }
     log_lines = [
@@ -243,6 +260,12 @@ def run_configuration(
             ]
             simulation_result = _run_command(simulation_command, project_root)
             simulation_output = simulation_result["stdout"] + simulation_result["stderr"]
+            trace_comparison = compare_trace_to_model(
+                simulation_output, depth, data_width
+            )
+            functional_coverage = collect_scenario_coverage(simulation_output, depth)
+            summary["trace_comparison"] = trace_comparison
+            summary["functional_coverage"] = functional_coverage
             summary["steps"]["simulation"] = {
                 key: simulation_result[key]
                 for key in ("command", "return_code", "elapsed_time_seconds")
@@ -264,6 +287,26 @@ def run_configuration(
                         else f"Simulation output did not contain {PASS_MARKER!r}"
                     )
                 )
+            elif trace_comparison["status"] != "match":
+                summary["exit_code"] = 5
+                summary["error_details"].append(
+                    "Reference-model trace comparison was "
+                    f"{trace_comparison['status']}: "
+                    f"{len(trace_comparison['mismatches'])} mismatch(es), "
+                    f"{len(trace_comparison['errors'])} trace error(s)"
+                )
+            else:
+                uncovered = [
+                    scenario["name"]
+                    for scenario in functional_coverage["scenarios"]
+                    if not scenario["covered"]
+                ]
+                if uncovered:
+                    summary["exit_code"] = 5
+                    summary["error_details"].append(
+                        "Required functional scenarios were not observed: "
+                        + ", ".join(uncovered)
+                    )
 
     summary["elapsed_time_seconds"] = time.perf_counter() - started
     summary["summary_file_path"] = summary_path.relative_to(project_root).as_posix()
@@ -310,6 +353,9 @@ def run_regression(
         )
         for depth, width in configurations
     ]
+    coverage_report_path = write_regression_coverage_report(
+        results, seed, random_cycles, reports_dir
+    )
     passed = all(
         result["compilation_status"] == "success"
         and result["simulation_status"] == "success"
@@ -319,6 +365,7 @@ def run_regression(
     return {
         "status": "PASS" if passed else "FAIL",
         "exit_code": 0 if passed else 1,
+        "functional_coverage_report_path": coverage_report_path,
         "configurations": results,
     }
 
@@ -344,7 +391,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"  Summary: {item['summary_file_path']}")
         print(f"  Log: {item['log_file_path']}")
+        trace = item["trace_comparison"]
+        config_coverage = item["functional_coverage"]["summary"]
+        print(
+            "  Model comparison: "
+            f"{trace['status']} ({trace['trace_records']} trace records); "
+            f"scenario coverage {config_coverage['covered_scenarios']}/"
+            f"{config_coverage['total_scenarios']}"
+        )
     print(f"Regression: {result['status']}")
+    print(f"Functional coverage JSON: {result['functional_coverage_report_path']}")
     return result["exit_code"]
 
 

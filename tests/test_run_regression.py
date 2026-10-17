@@ -8,6 +8,62 @@ from pathlib import Path
 from unittest import mock
 
 from scripts import run_regression
+from verification.fifo_reference_model import SynchronousFifoModel
+
+
+def _passing_testbench_output(depth, data_width=8, seed=1):
+    model = SynchronousFifoModel(depth=depth, data_width=data_width)
+    lines = []
+    cycle = 0
+
+    def edge(test_name, *, rst_n=True, wr_en=False, rd_en=False, data_in=0):
+        nonlocal cycle
+        state = model.step(
+            rst_n=rst_n, wr_en=wr_en, rd_en=rd_en, data_in=data_in
+        )
+        cycle += 1
+        lines.append(
+            f"PASS test={test_name} cycle={cycle} "
+            f"full expected={int(state['full'])} actual={int(state['full'])} "
+            f"empty expected={int(state['empty'])} actual={int(state['empty'])} "
+            f"occupancy expected={state['occupancy']} actual={state['occupancy']} "
+            f"data_out expected=0x{state['data_out']:x} actual=0x{state['data_out']:x}"
+        )
+        lines.append(
+            "TRACE_JSON "
+            + json.dumps(
+                {
+                    "cycle": cycle,
+                    "test": test_name,
+                    "rst_n": int(rst_n),
+                    "wr_en": int(wr_en),
+                    "rd_en": int(rd_en),
+                    "data_in_hex": format(data_in, "x"),
+                    "data_out_hex": format(state["data_out"], "x"),
+                    "occupancy": state["occupancy"],
+                    "full": int(state["full"]),
+                    "empty": int(state["empty"]),
+                }
+            )
+        )
+
+    edge("initial_reset", rst_n=False)
+    for value in range(depth):
+        edge("fill_to_full", wr_en=True, data_in=value + 1)
+    edge("write_rejected_when_full", wr_en=True, data_in=0xEE)
+    for _ in range(depth):
+        edge("drain_after_rejected_write", rd_en=True)
+    edge("read_rejected_when_empty", rd_en=True)
+    for iteration in range(depth + 2):
+        edge("write_pointer_wrap", wr_en=True, data_in=0x70 + iteration)
+        edge("read_pointer_wrap", rd_en=True)
+    edge("partial_simultaneous_setup", wr_en=True, data_in=0xA1)
+    edge("partial_simultaneous_setup", wr_en=True, data_in=0xA2)
+    edge("simultaneous_partially_occupied", wr_en=True, rd_en=True, data_in=0xA3)
+    edge("reset_during_operation_setup", wr_en=True, data_in=0x5A)
+    edge("reset_during_operation", rst_n=False)
+    lines.append(f"PASS ALL FIFO TESTS cycles={cycle} seed={seed}")
+    return "\n".join(lines)
 
 
 class RegressionTests(unittest.TestCase):
@@ -21,9 +77,16 @@ class RegressionTests(unittest.TestCase):
     @mock.patch("scripts.run_regression.shutil.which")
     def test_successful_multiple_configurations(self, which, run):
         which.side_effect = lambda tool: f"/tools/{tool}"
-        run.return_value = subprocess.CompletedProcess(
-            args=[], returncode=0, stdout="PASS ALL FIFO TESTS cycles=59 seed=1", stderr=""
-        )
+        run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=_passing_testbench_output(3), stderr=""
+            ),
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=_passing_testbench_output(5, 16), stderr=""
+            ),
+        ]
 
         result = run_regression.run_regression(
             ((3, 8), (5, 16)), 7, 12, self.project_root, self.reports_dir
@@ -32,11 +95,17 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(result["status"], "PASS")
         self.assertEqual(result["exit_code"], 0)
         self.assertEqual(run.call_count, 4)
+        self.assertTrue(Path(result["functional_coverage_report_path"]).exists())
         for config_result, expected in zip(result["configurations"], ((3, 8), (5, 16))):
             self.assertEqual(config_result["configuration"]["FIFO_DEPTH"], expected[0])
             self.assertEqual(config_result["configuration"]["DATA_WIDTH"], expected[1])
             self.assertEqual(config_result["compilation_status"], "success")
             self.assertEqual(config_result["simulation_status"], "success")
+            self.assertEqual(config_result["trace_comparison"]["status"], "match")
+            self.assertEqual(
+                config_result["functional_coverage"]["summary"]["uncovered_scenarios"],
+                0,
+            )
             report_path = self.project_root / config_result["summary_file_path"]
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(report["exit_code"], 0)
@@ -60,7 +129,7 @@ class RegressionTests(unittest.TestCase):
             subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="bad config"),
             subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
             subprocess.CompletedProcess(
-                args=[], returncode=0, stdout="PASS ALL FIFO TESTS", stderr=""
+                args=[], returncode=0, stdout=_passing_testbench_output(5, 16), stderr=""
             ),
         ]
 
@@ -75,6 +144,29 @@ class RegressionTests(unittest.TestCase):
         self.assertEqual(result["configurations"][0]["exit_code"], 3)
         self.assertEqual(result["configurations"][1]["simulation_status"], "success")
         self.assertEqual(run.call_count, 3)
+
+    @mock.patch("scripts.run_regression.subprocess.run")
+    @mock.patch("scripts.run_regression.shutil.which")
+    def test_trace_mismatch_fails_configuration(self, which, run):
+        which.side_effect = lambda tool: f"/tools/{tool}"
+        mismatched_output = _passing_testbench_output(3).replace(
+            '"data_out_hex": "1"', '"data_out_hex": "2"', 1
+        )
+        run.side_effect = [
+            subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+            subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=mismatched_output, stderr=""
+            ),
+        ]
+
+        result = run_regression.run_regression(
+            ((3, 8),), 1, 0, self.project_root, self.reports_dir
+        )
+
+        config = result["configurations"][0]
+        self.assertEqual(result["status"], "FAIL")
+        self.assertEqual(config["trace_comparison"]["status"], "mismatch")
+        self.assertEqual(config["exit_code"], 5)
 
     def test_invalid_config_arguments_are_rejected(self):
         parser = run_regression.build_parser()

@@ -75,7 +75,7 @@ The SystemVerilog scoreboard and Python automation tests are digital verificatio
 - Correct occupancy updates for accepted read/write combinations.
 - Full and empty behavior at exact boundaries and during simultaneous requests.
 - Reset behavior and the first legal data transfer after reset.
-- Agreement between the RTL, testbench scoreboard, and Python model.
+- Agreement between the RTL behavior and the testbench's internal queue scoreboard.
 
 ## Advanced Diagnostic Analysis
 
