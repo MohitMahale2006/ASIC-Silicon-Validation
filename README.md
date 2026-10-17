@@ -71,6 +71,15 @@ python scripts/run_validation.py --seed 123 --random-cycles 500
 
 Defaults are seed `1` and 100 randomized cycles, matching `tb/tb_sync_fifo.sv`. The runner checks both tools, compiles first, and skips simulation if tools are missing or compilation fails. It returns exit code 0 only if compilation and simulation both succeed.
 
+### Run a Parameter Regression
+
+```powershell
+python scripts/run_regression.py
+python scripts/run_regression.py --config 3x8 --config 5x16 --seed 456 --random-cycles 1000
+```
+
+The default matrix is `(FIFO_DEPTH, DATA_WIDTH)`: `(5, 8)`, `(3, 8)`, `(5, 16)`, `(8, 32)`, and `(16, 8)`. Custom configurations use `DEPTHxWIDTH`; depth must be at least 3 because the existing self-checking testbench requires partial occupancy, and width must be positive. The regression passes only if every configuration compiles and the simulation exits zero with `PASS ALL FIFO TESTS`. Each config gets distinct timestamped JSON, log, and `.vvp` files under `reports/`; a failure in one config is recorded and does not prevent remaining configurations from running. The ordinary `run_validation.py` command remains the single default configuration path.
+
 ### Run Opt-In Fault Injection
 
 ```powershell

@@ -1,10 +1,10 @@
 `timescale 1ns/1ps
 
 module tb_sync_fifo #(
-    parameter integer FIFO_DEPTH = 5
+    parameter integer FIFO_DEPTH = 5,
+    parameter integer DATA_WIDTH = 8
 );
 
-    localparam integer DATA_WIDTH = 8;
     localparam integer COUNT_WIDTH = $clog2(FIFO_DEPTH + 1);
 
     logic clk;

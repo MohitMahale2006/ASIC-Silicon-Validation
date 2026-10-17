@@ -30,6 +30,12 @@ The random seed and number of randomized cycles can be overridden with `+SEED=<d
 - Standard-library Python unit tests cover validation-runner and report-summarizer behavior; a separate Python FIFO reference model is not implemented yet.
 - CI runs those unit tests and normal FIFO simulation. Fault injection remains opt-in and is not part of routine CI.
 
+## Parameter Regression
+
+Run `python scripts/run_regression.py` for the default `(FIFO_DEPTH, DATA_WIDTH)` matrix: `(5, 8)`, `(3, 8)`, `(5, 16)`, `(8, 32)`, and `(16, 8)`. To select a subset, repeat `--config DEPTHxWIDTH`, for example `python scripts/run_regression.py --config 3x8 --config 5x16`. Icarus overrides the testbench top-level parameters using `-P tb_sync_fifo.FIFO_DEPTH=<depth>` and `-P tb_sync_fifo.DATA_WIDTH=<width>`; the RTL remains unchanged. The testbench supports depth >= 3 and positive data widths.
+
+Every configuration receives its own timestamped JSON summary, log, and compiled image under `reports/`. A regression passes only when all requested configs compile, each simulation exits zero, and each output contains the testbench's `PASS ALL FIFO TESTS` marker. Compile errors skip simulation for that config, are recorded with the compiler return code, and cause an overall nonzero exit. Other configs continue so the report identifies all outcomes.
+
 ## Opt-In Fault-Injection Check
 
 Run `python scripts/run_fault_injection.py` separately from normal validation. The harness mutates only a temporary RTL copy by inverting the read-data LSB. Expected evidence is a successful compile followed by a nonzero simulator exit containing `FAIL test=single_read_zero cycle=3 seed=1 data_out expected=0x00 actual=0x01`. A compile/tool error or a different simulation failure is not a detected fault. The harness returns zero only for the expected injected failure; the simulator itself must return nonzero. This check is intentionally excluded from routine CI so normal CI remains a pass-only validation run.
