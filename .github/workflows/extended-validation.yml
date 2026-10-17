@@ -1,0 +1,100 @@
+name: Extended FIFO Validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  extended-validation:
+    runs-on: ubuntu-latest
+    env:
+      REGRESSION_REPORT_DIR: reports/extended-validation-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Icarus Verilog
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes iverilog
+
+      - name: Run full Python unit suite
+        if: always()
+        run: python -m unittest discover -s tests -v
+
+      - name: Run normal FIFO validation
+        if: always()
+        run: python scripts/run_validation.py --seed 456 --random-cycles 1000
+
+      - name: Run five-configuration FIFO regression
+        if: always()
+        run: |
+          mkdir -p "$REGRESSION_REPORT_DIR"
+          before_files="$(mktemp)"
+          find reports -maxdepth 1 -type f \( -name 'regression_*.json' -o -name 'regression_*.log' \) -printf '%f\n' | sort > "$before_files"
+
+          if python scripts/run_regression.py --seed 456 --random-cycles 1000; then
+            regression_exit_code=0
+          else
+            regression_exit_code=$?
+          fi
+
+          while IFS= read -r report_file; do
+            if ! grep -Fqx "$report_file" "$before_files"; then
+              cp -- "reports/$report_file" "$REGRESSION_REPORT_DIR/"
+            fi
+          done < <(find reports -maxdepth 1 -type f \( -name 'regression_*.json' -o -name 'regression_*.log' \) -printf '%f\n' | sort)
+
+          rm -f "$before_files"
+          exit "$regression_exit_code"
+
+      - name: Generate regression matrix report
+        if: always()
+        run: |
+          if python scripts/summarize_regression.py \
+            --input-dir "$REGRESSION_REPORT_DIR" \
+            --output "$REGRESSION_REPORT_DIR/regression_matrix.md"; then
+            summary_exit_code=0
+          else
+            summary_exit_code=$?
+          fi
+
+          report_count="$(find "$REGRESSION_REPORT_DIR" -maxdepth 1 -type f -name 'regression_*.json' | wc -l)"
+          if [[ "$report_count" -ne 5 ]]; then
+            echo "Expected 5 current-run regression JSON reports; found $report_count." >&2
+            exit 1
+          fi
+          exit "$summary_exit_code"
+
+      - name: Verify controlled fault detection
+        if: always()
+        run: python scripts/run_fault_injection.py
+
+      - name: Upload extended validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: extended-validation-evidence-${{ github.run_number }}
+          path: |
+            reports/extended-validation-*/regression_matrix.md
+            reports/extended-validation-*/regression_*.json
+            reports/extended-validation-*/regression_*.log
+            reports/validation_*.json
+            reports/validation_*.log
+            reports/fault_injection_*.json
+            reports/fault_injection_*.log
+          if-no-files-found: error
+          retention-days: 14

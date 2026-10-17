@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from datetime import datetime, timezone
@@ -205,8 +206,28 @@ def generate_matrix(
     return result
 
 
-def main() -> int:
-    return generate_matrix()["exit_code"]
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Summarize per-configuration FIFO regression JSON reports."
+    )
+    parser.add_argument(
+        "--input-dir",
+        type=Path,
+        default=REPORTS_DIR,
+        help=f"directory containing regression_*.json reports (default: {REPORTS_DIR})",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=SUMMARY_PATH,
+        help=f"Markdown output path (default: {SUMMARY_PATH})",
+    )
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    return generate_matrix(args.input_dir, args.output)["exit_code"]
 
 
 if __name__ == "__main__":

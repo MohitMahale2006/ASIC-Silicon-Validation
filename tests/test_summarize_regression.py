@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts import summarize_regression
 
@@ -133,6 +134,41 @@ class SummarizeRegressionTests(unittest.TestCase):
             "python scripts/run_regression.py",
             self.output_path.read_text(encoding="utf-8"),
         )
+
+    def test_cli_selects_input_directory_and_output_path(self):
+        selected_dir = self.reports_dir / "current_run"
+        selected_dir.mkdir()
+        self.write_report("regression_old_fail.json", self.report(simulation_status="failed"))
+        (selected_dir / "regression_current.json").write_text(
+            json.dumps(self.report(3, 16)), encoding="utf-8"
+        )
+        selected_output = self.reports_dir / "current_run_matrix.md"
+
+        exit_code = summarize_regression.main(
+            ["--input-dir", str(selected_dir), "--output", str(selected_output)]
+        )
+
+        self.assertEqual(exit_code, 0)
+        markdown = selected_output.read_text(encoding="utf-8")
+        self.assertIn("regression_current.json", markdown)
+        self.assertNotIn("regression_old_fail.json", markdown)
+
+    def test_cli_defaults_preserve_reports_directory_and_matrix_path(self):
+        self.write_report("regression_default.json", self.report())
+
+        with (
+            mock.patch.object(
+                summarize_regression, "REPORTS_DIR", self.reports_dir
+            ),
+            mock.patch.object(
+                summarize_regression, "SUMMARY_PATH", self.output_path
+            ),
+        ):
+            exit_code = summarize_regression.main([])
+
+        self.assertEqual(exit_code, 0)
+        self.assertTrue(self.output_path.exists())
+        self.assertIn("regression_default.json", self.output_path.read_text())
 
 
 if __name__ == "__main__":
