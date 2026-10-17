@@ -54,9 +54,9 @@ The initial implementation should use synthesizable constructs and avoid simulat
 
 ## Verification and Automation Boundaries
 
-The SystemVerilog testbench checks the RTL against directed and randomized traffic. Standard-library Python unit tests cover the validation runner and report summarizer; a separate Python FIFO reference model is not implemented yet. The automation layer invokes real local simulator commands, captures their output and return code, and stores generated artifacts only under `reports/`.
+The SystemVerilog testbench checks the RTL against directed and randomized traffic using its internal queue scoreboard. Standard-library Python unit tests cover the validation runner, regression runner, report summarizers, fault-injection classification, and diagnostic analyzer; there is no separate Python FIFO reference model. The automation layer invokes real local simulator commands, captures their output and return code, and stores generated artifacts under `reports/`.
 
-The Python model and SystemVerilog testbench are complementary checks, not physical measurements. The framework will report exactly what was run and will not infer silicon coverage, timing, or pass status from missing logs.
+The SystemVerilog scoreboard and Python automation tests are digital verification checks, not physical measurements. Diagnostic categories are derived from report fields/messages and must not be interpreted as confirmed silicon root causes. The framework reports recorded evidence and does not infer silicon coverage, timing, or pass status from missing logs.
 
 ## Opt-In Fault Injection
 
@@ -66,8 +66,8 @@ The Python model and SystemVerilog testbench are complementary checks, not physi
 
 1. Validation runner compiles and runs the RTL testbench with the selected simulator.
 2. Runner preserves stdout/stderr, command metadata, and simulator exit status in `reports/`.
-3. Log analyzer classifies known pass/failure signatures and flags unknown or incomplete runs.
-4. Report generator summarizes observed outcomes without fabricating metrics.
+3. Regression and diagnostic analyzers classify recorded statuses and messages, flagging unknown or incomplete evidence.
+4. Markdown report generators summarize observed outcomes without fabricating metrics.
 
 ## Design Risks to Verify
 

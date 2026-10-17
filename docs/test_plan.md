@@ -27,8 +27,8 @@ The random seed and number of randomized cycles can be overridden with `+SEED=<d
 
 ## Current Automation Test Layers
 
-- Standard-library Python unit tests cover validation-runner and report-summarizer behavior; a separate Python FIFO reference model is not implemented yet.
-- CI runs those unit tests and normal FIFO simulation. Fault injection remains opt-in and is not part of routine CI.
+- Standard-library Python unit tests cover the validation and regression runners, fault-injection classification, report summaries, and diagnostic analysis. The FIFO scoreboard is in the SystemVerilog testbench; no separate Python FIFO reference model exists.
+- Basic CI runs unit tests and normal FIFO simulation. Extended CI also runs the five-config regression, regression matrix, opt-in fault detection, and current-run diagnostic analysis, then uploads report evidence.
 
 ## Parameter Regression
 
