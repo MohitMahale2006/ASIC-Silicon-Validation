@@ -76,3 +76,7 @@ The Python model and SystemVerilog testbench are complementary checks, not physi
 - Full and empty behavior at exact boundaries and during simultaneous requests.
 - Reset behavior and the first legal data transfer after reset.
 - Agreement between the RTL, testbench scoreboard, and Python model.
+
+## Advanced Diagnostic Analysis
+
+Run `python scripts/analyze_diagnostics.py --input-dir reports --output reports/diagnostic_analysis.md` to analyze validation and regression JSON evidence. PASS requires recorded compilation success, simulation success, and exit code zero; failures and incomplete evidence remain distinct. The analyzer may label evidence such as a compiler/tool issue, a testbench assertion, or a nonzero simulation exit, but these are diagnostic hints and do not establish a physical-silicon root cause. Extended CI directs the analyzer to that workflow attempt's isolated reports and uploads its diagnostic Markdown report.

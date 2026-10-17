@@ -112,6 +112,15 @@ Get-Content reports/regression_matrix.md
 
 The matrix reads per-configuration `regression_*.json` files and shows depth, data width, compile/simulation status, exit code, and result, with totals and an overall status. Malformed JSON files are listed separately; missing required fields are `INCOMPLETE`. It exits nonzero if any configuration fails or is incomplete, if reports are malformed, or if no usable regression reports exist.
 
+### Analyze Validation Diagnostics
+
+```powershell
+python scripts/analyze_diagnostics.py --input-dir reports --output reports/diagnostic_analysis.md
+Get-Content reports/diagnostic_analysis.md
+```
+
+The analyzer reads validation and regression JSON reports, distinguishes PASS, FAIL, and INCOMPLETE from recorded statuses and exit codes, and includes available configuration, seed/cycle, timestamp, and diagnostic-message context. Suggested categories such as tool/compile error, testbench failure, and nonzero simulation exit are evidence-based hints, not confirmed silicon root causes. It exits nonzero for any failed or incomplete report or unusable input. Extended CI analyzes its run-isolated JSON directory and uploads the Markdown report.
+
 ### Expected Outputs and Troubleshooting
 
 Each validation run creates unique timestamped files under `reports/`: a `.log` containing the command, stdout, stderr, return codes, and step timings; a `.json` summary with availability/status/error metadata; and a compiled `.vvp` image after successful compilation. Existing report files are not intentionally replaced. A successful simulation should include `PASS ALL FIFO TESTS` in the log; the JSON must show compilation and simulation as `success`. A missing-tool or compile error is recorded and yields a nonzero exit code; inspect the report's `error_details` and log stderr. If PowerShell cannot find the commands after installation, add the MSYS2 UCRT64 `bin` directory to `PATH` or run inside the UCRT64 terminal.

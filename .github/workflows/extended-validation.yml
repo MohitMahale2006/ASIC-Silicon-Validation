@@ -37,7 +37,25 @@ jobs:
 
       - name: Run normal FIFO validation
         if: always()
-        run: python scripts/run_validation.py --seed 456 --random-cycles 1000
+        run: |
+          mkdir -p "$REGRESSION_REPORT_DIR"
+          before_files="$(mktemp)"
+          find reports -maxdepth 1 -type f \( -name 'validation_*.json' -o -name 'validation_*.log' \) -printf '%f\n' | sort > "$before_files"
+
+          if python scripts/run_validation.py --seed 456 --random-cycles 1000; then
+            validation_exit_code=0
+          else
+            validation_exit_code=$?
+          fi
+
+          while IFS= read -r report_file; do
+            if ! grep -Fqx "$report_file" "$before_files"; then
+              cp -- "reports/$report_file" "$REGRESSION_REPORT_DIR/"
+            fi
+          done < <(find reports -maxdepth 1 -type f \( -name 'validation_*.json' -o -name 'validation_*.log' \) -printf '%f\n' | sort)
+
+          rm -f "$before_files"
+          exit "$validation_exit_code"
 
       - name: Run five-configuration FIFO regression
         if: always()
@@ -83,6 +101,13 @@ jobs:
         if: always()
         run: python scripts/run_fault_injection.py
 
+      - name: Analyze current-run diagnostics
+        if: always()
+        run: >-
+          python scripts/analyze_diagnostics.py
+          --input-dir "$REGRESSION_REPORT_DIR"
+          --output "$REGRESSION_REPORT_DIR/diagnostic_analysis.md"
+
       - name: Upload extended validation evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -90,6 +115,7 @@ jobs:
           name: extended-validation-evidence-${{ github.run_number }}
           path: |
             reports/extended-validation-*/regression_matrix.md
+            reports/extended-validation-*/diagnostic_analysis.md
             reports/extended-validation-*/regression_*.json
             reports/extended-validation-*/regression_*.log
             reports/validation_*.json
