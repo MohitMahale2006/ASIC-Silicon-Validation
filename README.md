@@ -77,6 +77,15 @@ Defaults are seed `1` and 100 randomized cycles, matching `tb/tb_sync_fifo.sv`. 
 python -m unittest discover -s tests -v
 ```
 
+### Generate and View a Validation Summary
+
+```powershell
+python scripts/summarize_reports.py
+Get-Content reports/validation_summary.md
+```
+
+The summary classifies only reports with successful compilation, successful simulation, and exit code 0 as `PASS`. Explicit failures are `FAIL`; missing fields are `INCOMPLETE`. Malformed JSON files are listed. If no usable validation reports exist, the command writes a helpful summary and exits nonzero.
+
 ### Expected Outputs and Troubleshooting
 
 Each validation run creates unique timestamped files under `reports/`: a `.log` containing the command, stdout, stderr, return codes, and step timings; a `.json` summary with availability/status/error metadata; and a compiled `.vvp` image after successful compilation. Existing report files are not intentionally replaced. A successful simulation should include `PASS ALL FIFO TESTS` in the log; the JSON must show compilation and simulation as `success`. A missing-tool or compile error is recorded and yields a nonzero exit code; inspect the report's `error_details` and log stderr. If PowerShell cannot find the commands after installation, add the MSYS2 UCRT64 `bin` directory to `PATH` or run inside the UCRT64 terminal.
