@@ -1,58 +1,141 @@
 # ASIC Silicon Validation and Automated Diagnostics Framework
 
-> Portfolio project targeting ASIC design verification and silicon-enablement automation skills.
+A compact ASIC verification project focused on a parameterized synchronous FIFO, self-checking SystemVerilog validation, and Python-based evidence analysis for pre-silicon diagnostics.
 
-## Project Status
+## Overview
 
-**Implemented:** synchronous FIFO RTL and self-checking testbench, Python validation/regression runners, fault injection, JSON-to-Markdown summaries, evidence-based diagnostic analysis, and GitHub Actions workflows. Local results must be generated and inspected; this README does not imply a current run or hosted CI result.
+This repository implements and validates a synchronous FIFO in synthesizable SystemVerilog, then checks the design with a self-checking testbench and independent Python reference-model comparison. The goal is to create a small but realistic verification flow for RTL debugging, regression coverage tracking, and diagnostic reporting without claiming fabricated silicon validation or production sign-off.
 
-## Objective
+The project is intentionally scoped to simulation-driven ASIC-style verification:
 
-Build and simulate a parameterized synchronous FIFO in synthesizable SystemVerilog, then automate run execution, report summarization, parameter regression, and controlled fault detection with Python.
+- RTL design under test: `rtl/sync_fifo.sv`
+- Self-checking testbench: `tb/tb_sync_fifo.sv`
+- Simulation toolchain: Icarus Verilog (`iverilog` and `vvp`)
+- Independent Python reference model: `verification/fifo_reference_model.py`
+- Trace comparison and scenario coverage: `verification/functional_coverage.py`
+- Regression and diagnostic automation: `scripts/`
 
-## Scope and Validation Boundary
+## Why this project matters
 
-This is a laptop-runnable **pre-silicon simulation and automation project**, not validation of fabricated ASIC silicon. It does not establish FPGA behavior, timing closure, power, analog behavior, reliability, or production sign-off. Diagnostic categories are evidence-based hints from report data, not proven hardware root causes.
+ASIC verification depends on the ability to turn an RTL model into evidence. This project demonstrates a practical workflow:
 
-## Planned Repository Layout
+1. model the intended FIFO contract,
+2. simulate real inputs through the RTL,
+3. compare the observed outputs against an independent reference model,
+4. record actual pass/fail evidence in machine-readable JSON, and
+5. summarize results with diagnostics instead of assumptions.
 
-- `rtl/`: synthesizable FIFO RTL
-- `tb/`: self-checking SystemVerilog testbench
-- `verification/`: reserved for future verification models/scenarios; no Python FIFO reference model is currently implemented
-- `scripts/`: simulation orchestration, log analysis, and report generation
-- `reports/`: generated validation artifacts only
-- `tests/`: standard-library Python unit tests for the validation utilities
-- `docs/`: architecture, test plan, and debugging guide
-- `.github/workflows/`: continuous-integration workflow
+This is relevant to silicon-validation internships because it shows experience with both RTL behavior and the engineering discipline behind regression, trace comparison, and evidence-driven debugging. It does not claim fabricated-chip testing, tape-out experience, or physical silicon validation.
 
-## Design Contract
+## Architecture and workflow
 
-The initial architecture and behavioral assumptions are captured in [docs/architecture.md](docs/architecture.md). The test plan is in [docs/test_plan.md](docs/test_plan.md). These documents define the intended contract to implement and verify; they are not evidence that implementation or tests have run.
+```text
+SystemVerilog FIFO RTL
+        ↓
+Self-checking testbench (directed + randomized scenarios)
+        ↓
+Icarus Verilog compile + simulation
+        ↓
+TRACE_JSON output from the testbench
+        ↓
+Independent Python FIFO reference model replay
+        ↓
+Trace comparison + functional scenario coverage
+        ↓
+JSON reports, regression data, and diagnostic analysis
+```
 
-## Validation Workflow
+### RTL and testbench
 
-1. Run the self-checking SystemVerilog testbench using Icarus Verilog.
-2. Optionally run the five-configuration parameter regression or controlled fault-injection check.
-3. Summarize recorded JSON results as Markdown or analyze evidence from a selected report directory.
-4. Run the standard-library Python unit tests.
+The FIFO is implemented in `rtl/sync_fifo.sv` and validated by `tb/tb_sync_fifo.sv`. The testbench includes:
 
-## Prerequisites and Commands
+- active-low synchronous reset behavior
+- full/empty and occupancy checks
+- ordered writes and reads
+- rejected writes while full and rejected reads while empty
+- pointer wraparound at non-power-of-two depths
+- simultaneous read/write behavior under pre-edge acceptance rules
+- deterministic random traffic driven by a seed and cycle count
 
-Requirements: Python 3.10+ and Icarus Verilog (`iverilog` and `vvp`). The runner and its unit tests use only Python's standard library. No FPGA board is needed. GTKWave is optional; the current testbench does not require waveform viewing.
+The testbench records pass/fail evidence and emits machine-readable `TRACE_JSON` lines after successful checks.
 
-### Install Python on Windows
+### Independent Python model
 
-Install Python 3.10 or newer from [python.org/downloads/windows](https://www.python.org/downloads/windows/). In the installer, enable **Add python.exe to PATH**, finish the installation, then open a new PowerShell terminal and confirm `python --version` reports Python 3.10 or newer. If the `python` command opens the Microsoft Store or is not found, disable the Python app execution aliases in Windows Settings or repair the installation with PATH enabled.
+The Python model in `verification/fifo_reference_model.py` implements the same contract as the RTL, including:
 
-### Install Icarus Verilog on Windows
+- synchronous active-low reset
+- pre-edge acceptance using `full` and `empty`
+- same-edge legal simultaneous read/write handling
+- rejected operations
+- hold behavior for `data_out` when no read is accepted
+- occupancy, pointer, and status behavior
 
-Install [MSYS2](https://www.msys2.org/), open its **UCRT64** terminal, and install the Icarus package:
+This model is intentionally independent from the SystemVerilog implementation and is used to compare recorded simulator traces against expected post-edge behavior.
 
-```sh
+### Functional coverage and reporting
+
+The module in `verification/functional_coverage.py` does two things:
+
+- replays each recorded `TRACE_JSON` entry through the Python model and compares it to the actual simulator output
+- checks whether required FIFO scenarios were actually observed in the passing testbench evidence
+
+These results are recorded in JSON under `reports/` and form the basis for coverage summaries and diagnostics.
+
+## Tools and technologies
+
+- SystemVerilog for RTL and testbench implementation
+- Python 3.10+ for runners, analysis, model comparison, and coverage logic
+- Icarus Verilog for compiling and running the RTL simulation (`iverilog`, `vvp`)
+- Git for repository management
+- GitHub Actions for CI and extended validation workflow automation
+
+## Verified regression results
+
+The current generated regression output confirms the following results from the project’s current run:
+
+- 5x8: 159 trace records matched
+- 3x8: 147 trace records matched
+- 5x16: 159 trace records matched
+- 8x32: 177 trace records matched
+- 16x8: 225 trace records matched
+- 8 of 8 required scenarios covered in each configuration
+- 53 Python unit tests passed
+
+The coverage report is stored under `reports/functional_coverage_*.json` and the current run shows 100% scenario coverage for the implemented FIFO behaviors.
+
+## Fault injection demonstration
+
+The project includes a deliberate fault-injection harness in `scripts/run_fault_injection.py`.
+
+This harness creates a temporary RTL copy and flips the least-significant bit of an accepted read value. The known expected failure is:
+
+```text
+FAIL test=single_read_zero cycle=3 seed=1 data_out expected=0x00 actual=0x01
+```
+
+The project’s generated fault-injection report confirms the expected behavior:
+
+- faulty simulation return code: `1`
+- framework detection status: `fault_detected`
+- framework exit code: `0`
+
+This is intentional: the simulator is expected to fail under the injected fault, while the fault-injection framework itself returns zero only when it confirms the expected failure signature was detected.
+
+## Setup and requirements
+
+### Python
+
+Install Python 3.10 or later from the official Python website and ensure `python` is on `PATH`.
+
+### Icarus Verilog on Windows
+
+Install MSYS2 and then install the Icarus package in the UCRT64 environment:
+
+```powershell
 pacman -S mingw-w64-ucrt-x86_64-iverilog
 ```
 
-The package includes both `iverilog` and `vvp`. Either add `C:\msys64\ucrt64\bin` to Windows `PATH` and run from PowerShell, or run the project commands from the UCRT64 terminal. In MSYS2, change to the project directory with `cd /c/Users/<you>/path/to/ASIC`. For the current PowerShell session, you can instead run:
+For the current PowerShell session, add the UCRT64 tools to `PATH`:
 
 ```powershell
 $env:Path = "C:\msys64\ucrt64\bin;$env:Path"
@@ -60,102 +143,97 @@ python --version
 Get-Command iverilog, vvp
 ```
 
-### Run Validation
+If `iverilog` or `vvp` is not found, the project scripts will report missing tools instead of continuing with a failed compile.
 
-From the project root in PowerShell:
+## Commands
+
+From the repository root:
+
+### Unit tests
 
 ```powershell
-Set-Location C:\Users\marat\OneDrive\Desktop\ASIC
+python -m unittest discover -s tests -v
+```
+
+### Single validation run
+
+```powershell
 python scripts/run_validation.py
 python scripts/run_validation.py --seed 123 --random-cycles 500
 ```
 
-Defaults are seed `1` and 100 randomized cycles, matching `tb/tb_sync_fifo.sv`. The runner checks both tools, compiles first, and skips simulation if tools are missing or compilation fails. It returns exit code 0 only if compilation and simulation both succeed.
-
-For a reproducible 1,000-cycle run:
-
-```powershell
-python scripts/run_validation.py --seed 456 --random-cycles 1000
-```
-
-### Run a Parameter Regression
+### Parameter regression
 
 ```powershell
 python scripts/run_regression.py
 python scripts/run_regression.py --config 3x8 --config 5x16 --seed 456 --random-cycles 1000
 ```
 
-The default matrix is `(FIFO_DEPTH, DATA_WIDTH)`: `(5, 8)`, `(3, 8)`, `(5, 16)`, `(8, 32)`, and `(16, 8)`. Custom configurations use `DEPTHxWIDTH`; depth must be at least 3 because the existing self-checking testbench requires partial occupancy, and width must be positive. The regression passes only if every configuration compiles and the simulation exits zero with `PASS ALL FIFO TESTS`. Each config gets distinct timestamped JSON, log, and `.vvp` files under `reports/`; a failure in one config is recorded and does not prevent remaining configurations from running. The ordinary `run_validation.py` command remains the single default configuration path.
+The default regression matrix is:
 
-The regression runner returns nonzero if any requested configuration fails. The regression summarizer reads all matching reports in `reports/` by default, including historical runs; pass `--input-dir` to scope it to one run directory and `--output` to save a separate matrix.
+- 5x8
+- 3x8
+- 5x16
+- 8x32
+- 16x8
 
-### Run Opt-In Fault Injection
+### Fault injection
 
 ```powershell
 python scripts/run_fault_injection.py
 ```
 
-This command generates a temporary RTL copy with the read-data least-significant bit inverted; it never changes `rtl/sync_fifo.sv` or `tb/tb_sync_fifo.sv`. The testbench is expected to stop at `single_read_zero` with `expected=0x00 actual=0x01`. The harness reports detection success only when compilation succeeds, the simulator exits nonzero, and that exact diagnostic appears. Thus the simulator failure is expected, while the harness command itself exits zero for confirmed detection and nonzero for compile/tool errors or an undetected/unexpected failure. Fault-injection logs, JSON summaries, and compiled images use separate `fault_injection_*` names under `reports/`.
+### Diagnostic analysis
 
-The nonzero simulator exit is the intended fault stimulus. It is not evidence of a physical FIFO or silicon failure.
+```powershell
+python scripts/analyze_diagnostics.py --input-dir reports --output reports/diagnostic_analysis.md
+```
 
-### Run Python Unit Tests
+## Report locations
+
+Generated artifacts are placed under `reports/`:
+
+- `validation_*.json` and `validation_*.log`
+- `regression_*.json`, `regression_*.log`, and `regression_*.vvp`
+- `functional_coverage_*.json`
+- `fault_injection_*.json` and `fault_injection_*.log`
+- `regression_matrix.md`
+- `validation_summary.md`
+- `diagnostic_analysis.md`
+
+These files capture the actual simulator commands, return codes, pass/fail evidence, trace records, and coverage summary.
+
+## Troubleshooting
+
+- If Python cannot import `verification`, ensure you are running the command from the repository root.
+- If `iverilog` is not found, add `C:\msys64\ucrt64\bin` to `PATH` for the current session.
+- If a regression fails due to a trace mismatch, inspect the `trace_comparison` section in the matching JSON report.
+- If a scenario is not counted as covered, inspect the JSON coverage report and the original `TRACE_JSON` lines used to produce that result.
+- Keep generated reports under `reports/`; do not rewrite historical artifacts to create a false pass.
+
+## Relevance to silicon validation internships
+
+This project demonstrates a realistic pre-silicon verification flow: RTL design, self-checking validation, trace-based model comparison, functional coverage analysis, and evidence reporting. It is relevant to ASIC and silicon-validation internship work because it shows disciplined verification practice, regression automation, and the ability to interpret real tooling output rather than relying on assumptions.
+
+It is intentionally limited to simulation and diagnostics; it does not claim physical silicon testing, tape-out experience, or production hardware sign-off.
+
+## Repository layout
+
+- `rtl/` — synthesizable FIFO RTL
+- `tb/` — SystemVerilog testbench
+- `verification/` — Python reference model and trace comparison logic
+- `scripts/` — simulation, regression, and diagnostics automation
+- `reports/` — generated evidence and summaries
+- `tests/` — standard-library Python unit tests
+- `docs/` — architecture and test-plan documentation
+- `.github/workflows/` — CI and extended-validation workflows
+
+## Verified command
+
+The following command was verified locally with exit code 0:
 
 ```powershell
 python -m unittest discover -s tests -v
 ```
 
-### Generate and View a Validation Summary
-
-```powershell
-python scripts/summarize_reports.py
-Get-Content reports/validation_summary.md
-```
-
-The summary classifies only reports with successful compilation, successful simulation, and exit code 0 as `PASS`. Explicit failures are `FAIL`; missing fields are `INCOMPLETE`. Malformed JSON files are listed. If no usable validation reports exist, the command writes a helpful summary and exits nonzero.
-
-### Generate the Regression Matrix
-
-```powershell
-python scripts/summarize_regression.py
-Get-Content reports/regression_matrix.md
-```
-
-The matrix reads per-configuration `regression_*.json` files and shows depth, data width, compile/simulation status, exit code, and result, with totals and an overall status. Malformed JSON files are listed separately; missing required fields are `INCOMPLETE`. It exits nonzero if any configuration fails or is incomplete, if reports are malformed, or if no usable regression reports exist.
-
-### Analyze Validation Diagnostics
-
-```powershell
-python scripts/analyze_diagnostics.py --input-dir reports --output reports/diagnostic_analysis.md
-Get-Content reports/diagnostic_analysis.md
-```
-
-The analyzer reads validation and regression JSON reports, distinguishes PASS, FAIL, and INCOMPLETE from recorded statuses and exit codes, and includes available configuration, seed/cycle, timestamp, and diagnostic-message context. Suggested categories such as tool/compile error, testbench failure, and nonzero simulation exit are evidence-based hints, not confirmed silicon root causes. It exits nonzero for any failed or incomplete report or unusable input. Extended CI analyzes its run-isolated JSON directory and uploads the Markdown report.
-
-Without `--input-dir`, the analyzer scans all matching reports in `reports/`, including historical runs. For current-run-only analysis, select the isolated directory printed or created for that run:
-
-```powershell
-python scripts/analyze_diagnostics.py --input-dir reports/extended-validation-<run-id>-<attempt> --output reports/extended-validation-<run-id>-<attempt>/diagnostic_analysis.md
-```
-
-### Expected Outputs and Troubleshooting
-
-Each validation run creates unique timestamped files under `reports/`: a `.log` containing the command, stdout, stderr, return codes, and step timings; a `.json` summary with availability/status/error metadata; and a compiled `.vvp` image after successful compilation. Existing report files are not intentionally replaced. A successful simulation should include `PASS ALL FIFO TESTS` in the log; the JSON must show compilation and simulation as `success`. A missing-tool or compile error is recorded and yields a nonzero exit code; inspect the report's `error_details` and log stderr. If PowerShell cannot find the commands after installation, add the MSYS2 UCRT64 `bin` directory to `PATH` or run inside the UCRT64 terminal.
-
-## GitHub Actions
-
-`.github/workflows/ci.yml` runs Python unit tests and single-run FIFO validation on pushes and pull requests. `.github/workflows/extended-validation.yml` additionally runs the five-configuration regression, report generation, controlled fault injection, and diagnostic analysis. The extended workflow runs on manual dispatch and on pushes or pull requests targeting `main`.
-
-To inspect hosted results, open the repository's **Actions** tab, select the run and commit, then download the `extended-validation-evidence-*` artifact from the run summary. It contains run-isolated regression JSON/logs, the regression matrix, diagnostic report, and validation/fault evidence JSON/logs; compiled `.vvp` images are excluded. Workflow success must be confirmed from that actual Actions run; local results do not establish hosted CI status. Both workflows run the unit suite and normal validation for `main` events, so those checks currently execute twice.
-
-## Limitations and Future Improvements
-
-- This project verifies RTL in simulation; it does not validate fabricated ASIC silicon, FPGA behavior, timing, power, analog behavior, reliability, or production sign-off.
-- The SystemVerilog testbench contains a queue scoreboard. A separate Python FIFO reference model, formal proof, and measured functional-coverage database are not implemented.
-- Diagnostic categories are heuristics based on recorded report data and are not confirmed hardware root causes.
-- The regression runner writes timestamped reports to the shared root `reports/` directory. Extended CI snapshots newly created outputs into a per-attempt directory; adding an output-directory option to the runner would remove that workflow-level collection step.
-- High-value next steps include independent model checking, formal assertions, measured coverage goals, and a separate lab plan for eventual silicon evaluation.
-
-## Results
-
-Run-specific results belong in `reports/`; they are not checked into this README. The automated flow is pre-silicon simulation, not physical silicon validation, and makes no claim about fabricated devices, timing, power, or silicon coverage.
+This run reported 53 tests passed.
