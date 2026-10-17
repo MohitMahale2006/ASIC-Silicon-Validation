@@ -54,9 +54,13 @@ The initial implementation should use synthesizable constructs and avoid simulat
 
 ## Verification and Automation Boundaries
 
-The SystemVerilog testbench checks the RTL against directed and randomized traffic. A separate Python model provides an executable behavioral reference, and pytest checks that model and log/report utilities. The automation layer invokes real local simulator commands, captures their output and return code, and stores generated artifacts only under `reports/`.
+The SystemVerilog testbench checks the RTL against directed and randomized traffic. Standard-library Python unit tests cover the validation runner and report summarizer; a separate Python FIFO reference model is not implemented yet. The automation layer invokes real local simulator commands, captures their output and return code, and stores generated artifacts only under `reports/`.
 
 The Python model and SystemVerilog testbench are complementary checks, not physical measurements. The framework will report exactly what was run and will not infer silicon coverage, timing, or pass status from missing logs.
+
+## Opt-In Fault Injection
+
+`scripts/run_fault_injection.py` creates an isolated temporary copy of the RTL and flips the least-significant bit of accepted read data. It compiles that copy against the existing testbench without changing the normal RTL, testbench, or `run_validation.py` path. The known first read of `0x00` must trigger the testbench diagnostic `FAIL test=single_read_zero cycle=3 seed=1 data_out expected=0x00 actual=0x01` and a nonzero simulator return code. Compilation errors, missing tools, unrelated simulation failures, and simulations that unexpectedly return zero do not count as detection. The harness exits zero only when the intended diagnostic and nonzero simulator result are both observed; its artifacts have a separate `fault_injection_` prefix.
 
 ## Planned Data Flow
 

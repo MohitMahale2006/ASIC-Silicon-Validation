@@ -25,10 +25,14 @@ Implemented directed scenarios:
 
 The random seed and number of randomized cycles can be overridden with `+SEED=<decimal>` and `+RANDOM_CYCLES=<decimal>`. Defaults are seed 1 and 100 cycles. The testbench requires `FIFO_DEPTH >= 3` for its partial-occupancy scenario; its default is 5.
 
-## Planned Follow-On Test Layers
+## Current Automation Test Layers
 
-- Python reference-model and log/report utility tests are not implemented yet.
-- CI integration is not implemented yet.
+- Standard-library Python unit tests cover validation-runner and report-summarizer behavior; a separate Python FIFO reference model is not implemented yet.
+- CI runs those unit tests and normal FIFO simulation. Fault injection remains opt-in and is not part of routine CI.
+
+## Opt-In Fault-Injection Check
+
+Run `python scripts/run_fault_injection.py` separately from normal validation. The harness mutates only a temporary RTL copy by inverting the read-data LSB. Expected evidence is a successful compile followed by a nonzero simulator exit containing `FAIL test=single_read_zero cycle=3 seed=1 data_out expected=0x00 actual=0x01`. A compile/tool error or a different simulation failure is not a detected fault. The harness returns zero only for the expected injected failure; the simulator itself must return nonzero. This check is intentionally excluded from routine CI so normal CI remains a pass-only validation run.
 
 ## Checks and Evidence
 

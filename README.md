@@ -71,6 +71,14 @@ python scripts/run_validation.py --seed 123 --random-cycles 500
 
 Defaults are seed `1` and 100 randomized cycles, matching `tb/tb_sync_fifo.sv`. The runner checks both tools, compiles first, and skips simulation if tools are missing or compilation fails. It returns exit code 0 only if compilation and simulation both succeed.
 
+### Run Opt-In Fault Injection
+
+```powershell
+python scripts/run_fault_injection.py
+```
+
+This command generates a temporary RTL copy with the read-data least-significant bit inverted; it never changes `rtl/sync_fifo.sv` or `tb/tb_sync_fifo.sv`. The testbench is expected to stop at `single_read_zero` with `expected=0x00 actual=0x01`. The harness reports detection success only when compilation succeeds, the simulator exits nonzero, and that exact diagnostic appears. Thus the simulator failure is expected, while the harness command itself exits zero for confirmed detection and nonzero for compile/tool errors or an undetected/unexpected failure. Fault-injection logs, JSON summaries, and compiled images use separate `fault_injection_*` names under `reports/`.
+
 ### Run Python Unit Tests
 
 ```powershell

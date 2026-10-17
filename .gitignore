@@ -4,3 +4,6 @@ __pycache__/
 reports/validation_*.log
 reports/validation_*.json
 reports/validation_*.vvp
+reports/fault_injection_*.log
+reports/fault_injection_*.json
+reports/fault_injection_*.vvp
